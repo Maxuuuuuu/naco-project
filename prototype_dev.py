@@ -4,7 +4,6 @@
 # Imports 
 import random
 from dataclasses import dataclass
-from enum import Enum
 import math
 
 from position import Position
@@ -132,6 +131,7 @@ def update_population_once(
 ) -> Population_state:
 
     for prey in strategies:
+        prey.history.add(prey.position)
         prey.update_position()
 
     enforce_geometric_constraints(strategies, r_F_L=r_F_L)
@@ -222,7 +222,7 @@ def enforce_geometric_constraints(
     enforce_cohesive_group_constraint(strategies)
 
 def random_relocation(
-    state: Population_state,
+    strategies: list[Strategy_prey],
     r_F_L: int = 8,
 ) -> Population_state:
     positions = [
@@ -232,18 +232,18 @@ def random_relocation(
         Position.CENTER,
     ]
 
-    all_positions = random.choices(positions, k=state.total)
+    all_positions = random.choices(positions, k=len(strategies))
 
-    new_state = compress_positions_to_state(all_positions)
-    new_state = enforce_geometric_constraints(new_state, r_F_L=r_F_L)
-    new_state.validation()
-    return new_state
+    for pos, strategy in zip(all_positions, strategies):
+        strategy.position = pos
+
+    enforce_geometric_constraints(strategies, r_F_L=r_F_L)
+    return compress_positions_to_state(strategies)
 
 def run_simulation(
     initial_state: Population_state,
-    strategy: Strategy_prey,
+    strategies: list[Strategy_prey],
     steps: int = 40000, #initial 500
-    burn_in: int = 1000, #initial 100
     r_F_L: int = 8,
     relocation_interval: int = 200,
 ) -> dict[str, float]:
@@ -255,12 +255,10 @@ def run_simulation(
     if steps <= 0:
         raise ValueError("steps must be positive.")
 
-    if burn_in < 0 or burn_in >= steps:
-        raise ValueError("burn_in must be >= 0 and smaller than steps.")
-
     state = initial_state
     state.validation()
-    strategy.validation()
+    for strategy in strategies:
+        strategy.validation()
 
     counts = {
         "L": 0,
@@ -272,23 +270,21 @@ def run_simulation(
     measured_steps = 0
 
     for t in range(steps):
-        state = update_population_once(
-            state=state,
-            strategy=strategy,
+        update_population_once(
+            strategies=strategies,
             r_F_L=r_F_L,
         )
 
-        state = random_relocation(state, r_F_L=r_F_L)
+        #state = random_relocation(strategies, r_F_L=r_F_L)
 
         if (t + 1) % relocation_interval == 0:
-            state = random_relocation(state)
+            state = random_relocation(strategies, r_F_L=r_F_L)
 
-        if t >= burn_in:
-            counts["L"] += state.n_L
-            counts["F"] += state.n_F
-            counts["B"] += state.n_B
-            counts["C"] += state.n_C
-            measured_steps += 1
+        counts["L"] += state.n_L
+        counts["F"] += state.n_F
+        counts["B"] += state.n_B
+        counts["C"] += state.n_C
+        measured_steps += 1
 
     total_observations = initial_state.total * measured_steps
 
@@ -300,7 +296,7 @@ def run_simulation(
     }
 
 def compute_risk(
-    frequencies: dict[str, float],
+    strategy: Strategy_prey,
     environment: Env,
 ) -> float:
     """
@@ -310,35 +306,43 @@ def compute_risk(
 
     env = environment.normalize()
 
+    # Total positions had.
+    total: int = strategy.history.total()
+
     return (
-        env.X_L * frequencies["L"]
-        + env.X_F * frequencies["F"]
-        + env.X_B * frequencies["B"]
-        + env.X_C * frequencies["C"]
+        env.X_L * strategy.history.L_count / total
+        + env.X_F * strategy.history.F_count / total
+        + env.X_B * strategy.history.B_count / total
+        + env.X_C * strategy.history.C_count / total
     )
 
 
 def compute_prey_fitness(
-    frequencies: dict[str, float],
+    strategies: list[Strategy_prey],
     environment: Env,
-) -> float:
+) -> list[tuple[Strategy_prey, float]]:
     """
     Converts risk into fitness.
     Higher fitness is better.
     """
 
-    risk = compute_risk(frequencies, environment)
-    return 1.0 - risk
+    fitness: list[tuple[Strategy_prey, float]] = []
+
+    for strategy in strategies:
+        risk = compute_risk(strategy, environment)
+        fitness.append((strategy, 1 - risk))
+
+    return fitness
 
 def evaluate_strategy(
-    strategy: Strategy_prey,
+    strategies: list[Strategy_prey],
     initial_state: Population_state,
     environment: Env,
     steps: int = 40000, #initial 500
     burn_in: int = 1000, #initial 100
     r_F_L: int = 8,
     relocation_interval: int = 200,
-) -> tuple[dict[str, float], float]:
+) -> tuple[dict[str, float], list[tuple[Strategy_prey, float]]]:
     """
     Runs simulation and returns:
     1. positional frequencies f
@@ -347,15 +351,14 @@ def evaluate_strategy(
 
     frequencies = run_simulation(
         initial_state=initial_state,
-        strategy=strategy,
+        strategies=strategies,
         steps=steps,
-        burn_in=burn_in,
         r_F_L=r_F_L,
         relocation_interval=relocation_interval,
     )
 
     fitness = compute_prey_fitness(
-        frequencies=frequencies,
+        strategies=strategies,
         environment=environment,
     )
 
