@@ -177,7 +177,7 @@ def max_center_count(herd_size: int) -> int:
     if herd_size <= 0:
         return 0
 
-    value = (herd_size ** (1 / 3) - 2) ** 3
+    value = (herd_size ** (1 / 3) - 2) #** 3
 
     return max(0, math.floor(value))
 
@@ -215,12 +215,31 @@ def enforce_geometric_constraints(
     state.validation()
     return state
 
+def random_relocation(
+    state: Population_state,
+    r_F_L: int = 8,
+) -> Population_state:
+    positions = [
+        Position.LEADER,
+        Position.FOLLOWER,
+        Position.BORDER,
+        Position.CENTER,
+    ]
+
+    all_positions = random.choices(positions, k=state.total)
+
+    new_state = compress_positions_to_state(all_positions)
+    new_state = enforce_geometric_constraints(new_state, r_F_L=r_F_L)
+    new_state.validation()
+    return new_state
+
 def run_simulation(
     initial_state: Population_state,
     strategy: Strategy_prey,
-    steps: int = 500,
-    burn_in: int = 100,
+    steps: int = 40000, #initial 500
+    burn_in: int = 1000, #initial 100
     r_F_L: int = 8,
+    relocation_interval: int = 200,
 ) -> dict[str, float]:
     """
     Runs the behavioural simulation and returns long-run positional frequencies.
@@ -252,6 +271,11 @@ def run_simulation(
             strategy=strategy,
             r_F_L=r_F_L,
         )
+
+        state = random_relocation(state, r_F_L=r_F_L)
+
+        if (t + 1) % relocation_interval == 0:
+            state = random_relocation(state)
 
         if t >= burn_in:
             counts["L"] += state.n_L
@@ -304,9 +328,10 @@ def evaluate_strategy(
     strategy: Strategy_prey,
     initial_state: Population_state,
     environment: Env,
-    steps: int = 500,
-    burn_in: int = 100,
+    steps: int = 40000, #initial 500
+    burn_in: int = 1000, #initial 100
     r_F_L: int = 8,
+    relocation_interval: int = 200,
 ) -> tuple[dict[str, float], float]:
     """
     Runs simulation and returns:
@@ -320,6 +345,7 @@ def evaluate_strategy(
         steps=steps,
         burn_in=burn_in,
         r_F_L=r_F_L,
+        relocation_interval=relocation_interval,
     )
 
     fitness = compute_prey_fitness(
