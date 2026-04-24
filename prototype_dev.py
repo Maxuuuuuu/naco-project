@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from enum import Enum
 import math
 
+from position_history import PositionHistory
+
+
 # Define the possible positions for the agent
 class Position(str, Enum):
     LEADER = "L"
@@ -14,18 +17,53 @@ class Position(str, Enum):
     BORDER = "B"
     CENTER = "C"
 
-
 @dataclass
 class Strategy_prey:
     p_F_given_L: float
     p_L_given_F: float
-    p_L_given_B: float 
+    p_L_given_B: float
+
+    position: Position
+
+    history: PositionHistory = PositionHistory()
 
     def validation(self) -> None:
         values = [self.p_F_given_L, self.p_L_given_F, self.p_L_given_B]
         for value in values:
             if not (0.0 <= value <= 1.0):
                 raise ValueError("All probabilities must be between 0 and 1.")
+
+    def update_position(self) -> None:
+        self.validation()
+
+        r = random.random()
+
+        if self.position == Position.LEADER:
+            if r < self.p_F_given_L:
+                self.position = Position.FOLLOWER
+            else:
+                self.position =  Position.LEADER
+            return
+
+        elif self.position == Position.FOLLOWER:
+            if r < self.p_L_given_F:
+                self.position =  Position.LEADER
+            else:
+                self.position =  Position.FOLLOWER
+            return
+
+        elif self.position == Position.BORDER:
+            if r < self.p_L_given_B:
+                self.position =  Position.LEADER
+            else:
+                self.position =  Position.BORDER
+            return
+
+        elif self.position == Position.CENTER:
+            self.position =  Position.CENTER
+            return
+
+        raise ValueError(f"Unknown position: {self.position}")
             
 
 @dataclass
@@ -73,41 +111,16 @@ class Population_state:
         return self.n_L + self.n_F + self.n_B + self.n_C
     def vector(self) -> list[int]:
         return [self.n_L, self.n_F, self.n_B, self.n_C]
-    
-def update_one_position(position: Position, strategy: Strategy_prey) -> Position:
-    strategy.validation()
 
-    r = random.random()
-
-    if position == Position.LEADER:
-        if r < strategy.p_F_given_L:
-            return Position.FOLLOWER
-        return Position.LEADER
-
-    if position == Position.FOLLOWER:
-        if r < strategy.p_L_given_F:
-            return Position.LEADER
-        return Position.FOLLOWER
-
-    if position == Position.BORDER:
-        if r < strategy.p_L_given_B:
-            return Position.LEADER
-        return Position.BORDER
-
-    if position == Position.CENTER:
-        return Position.CENTER
-
-    raise ValueError(f"Unknown position: {position}")
-
-def expand_state_to_positions(state: Population_state) -> list[Position]:
-    state.validation()
-
-    return (
-        [Position.LEADER] * state.n_L
-        + [Position.FOLLOWER] * state.n_F
-        + [Position.BORDER] * state.n_B
-        + [Position.CENTER] * state.n_C
-    )
+# def expand_state_to_positions(state: Population_state) -> list[Position]:
+#     state.validation()
+#
+#     return (
+#         [Position.LEADER] * state.n_L
+#         + [Position.FOLLOWER] * state.n_F
+#         + [Position.BORDER] * state.n_B
+#         + [Position.CENTER] * state.n_C
+#     )
 
 
 def compress_positions_to_state(positions: list[Position]) -> Population_state:
@@ -121,17 +134,15 @@ def compress_positions_to_state(positions: list[Position]) -> Population_state:
 
 def update_population_once(
     state: Population_state,
-    strategy: Strategy_prey,
+    strategies: list[Strategy_prey],
     r_F_L: int = 8,
 ) -> Population_state:
-    positions = expand_state_to_positions(state)
+    #positions = expand_state_to_positions(state)
 
-    updated_positions = [
-        update_one_position(position, strategy)
-        for position in positions
-    ]
+    for prey in strategies:
+        prey.position = update_one_position(prey)
 
-    new_state = compress_positions_to_state(updated_positions)
+    new_state = compress_positions_to_state(strategies)
     new_state = enforce_geometric_constraints(new_state, r_F_L=r_F_L)
     new_state.validation()
 

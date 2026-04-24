@@ -1,7 +1,6 @@
 import csv
 from prototype_dev import Strategy_prey, Env, Population_state, evaluate_strategy
 
-
 def generate_fixed_environments(step: float = 0.1):
     n = round(1 / step)
     for i in range(n + 1):
@@ -30,7 +29,7 @@ def main():
         n_C=20,
     )
 
-    step = 0.1 #0.1, 0.05, 0.25, 0.01, 0.0025
+    step = 0.0025 #0.1, 0.05, 0.25, 0.01, 0.0025
     out_file = "results_step_0_1.csv"
 
     rows = []
