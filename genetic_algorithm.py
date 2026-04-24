@@ -38,31 +38,69 @@ def generate_for_position(pos: Position) -> Strategy_prey:
 
     return strat
 
-def compute_generation_fitness(prey: list[Strategy_prey]):
+def create_generation(generation: list[tuple[Strategy_prey, float]], mu: float = 0.1, k: int = 5):
+    new_generation: list[Strategy_prey] = []
 
-    return 0
+    n = len(generation)
 
-# def create_generation(current_gen: list[Strategy_prey], mu: float = 0.1, k: int = 5):
-#     new_generation: list[Strategy_prey] = []
-#
-#     n = len(current_gen)
-#
-#     for i in range(n):
-#
-#
-#     return 0
-#
-# def select_parent(generation: list[Strategy_prey], k: int) -> Strategy_prey:
-#     candidates: list[Strategy_prey] = []
-#
-#     n = len(generation)
-#
-#     for _ in range(k):
-#         index = random.randint(0, n - 1)
-#         candidates.append(generation[index])
-#
-#     # Needs to be fitness based!!
-#
-#     return parents
-#
-# def combine_genes(generation: list[Strategy_prey], mu: float, k: int) -> Strategy_prey:
+    for i in range(int(n / 2)):
+        parent1 = select_parent(generation, k)
+
+        parent2: Strategy_prey
+        while True:
+            parent2 = select_parent(generation, k)
+            if parent1 != parent2:
+                break
+
+        child1, child2 = combine_genes(parent1, parent2, mu)
+        new_generation.append(child1)
+        new_generation.append(child2)
+
+    return new_generation
+
+def select_parent(generation: list[tuple[Strategy_prey, float]], k: int) -> Strategy_prey:
+    candidates: list[tuple[Strategy_prey, float]] = []
+
+    n = len(generation)
+
+    for _ in range(k):
+        index = random.randint(0, n - 1)
+        candidates.append(generation[index])
+
+    return max(candidates, key=lambda x: x[1])[0]
+
+def combine_genes(parent1: Strategy_prey, parent2: Strategy_prey, mu: float) -> tuple[Strategy_prey, Strategy_prey]:
+    split: int = random.choice([1,2])
+
+    child1: Strategy_prey
+    child2: Strategy_prey
+
+    if split == 1:
+        child1 = Strategy_prey(
+            p_F_given_L=parent1.p_F_given_L,
+            p_L_given_F=parent2.p_L_given_F,
+            p_L_given_B=parent2.p_L_given_B,
+            position=parent2.position # reassigned later
+        )
+        child2 = Strategy_prey(
+            p_F_given_L=parent2.p_F_given_L,
+            p_L_given_F=parent1.p_L_given_F,
+            p_L_given_B=parent1.p_L_given_B,
+            position=parent1.position  # reassigned later
+        )
+
+    else:
+        child1 = Strategy_prey(
+            p_F_given_L=parent1.p_F_given_L,
+            p_L_given_F=parent1.p_L_given_F,
+            p_L_given_B=parent2.p_L_given_B,
+            position=parent2.position  # reassigned later
+        )
+        child2 = Strategy_prey(
+            p_F_given_L=parent2.p_F_given_L,
+            p_L_given_F=parent2.p_L_given_F,
+            p_L_given_B=parent1.p_L_given_B,
+            position=parent1.position  # reassigned later
+        )
+
+    return child1, child2
