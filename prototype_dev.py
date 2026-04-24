@@ -123,61 +123,60 @@ class Population_state:
 #     )
 
 
-def compress_positions_to_state(positions: list[Position]) -> Population_state:
+def compress_positions_to_state(strategies: list[Strategy_prey]) -> Population_state:
     return Population_state(
-        n_L=positions.count(Position.LEADER),
-        n_F=positions.count(Position.FOLLOWER),
-        n_B=positions.count(Position.BORDER),
-        n_C=positions.count(Position.CENTER),
+        n_L=sum(s.position == Position.LEADER for s in strategies),
+        n_F=sum(s.position == Position.FOLLOWER for s in strategies),
+        n_B=sum(s.position == Position.BORDER for s in strategies),
+        n_C=sum(s.position == Position.CENTER for s in strategies),
     )
 
 
 def update_population_once(
-    state: Population_state,
     strategies: list[Strategy_prey],
     r_F_L: int = 8,
 ) -> Population_state:
-    #positions = expand_state_to_positions(state)
 
     for prey in strategies:
-        prey.position = update_one_position(prey)
+        prey.update_position()
 
-    new_state = compress_positions_to_state(strategies)
-    new_state = enforce_geometric_constraints(new_state, r_F_L=r_F_L)
-    new_state.validation()
+    enforce_geometric_constraints(strategies, r_F_L=r_F_L)
 
-    return new_state
+    return compress_positions_to_state(strategies)
 
 def enforce_mobile_group_constraint(
-    state: Population_state,
+    strategies: list[Strategy_prey],
     r_F_L: int = 8,
-) -> Population_state:
+) -> None:
     """
     Ensures followers do not exceed the allowed follower/leader ratio.
     If there are too many followers, excess followers are moved to border.
     """
+    state = compress_positions_to_state(strategies)
 
     if state.n_L == 0:
-        return Population_state(
-            n_L=0,
-            n_F=0,
-            n_B=state.n_B + state.n_F,
-            n_C=state.n_C,
-        )
+        for prey in strategies:
+            if prey.position == Position.FOLLOWER:
+                prey.position = Position.BORDER
+        return
 
     max_followers = r_F_L * state.n_L
 
     if state.n_F <= max_followers:
-        return state
+        return
 
     excess_followers = state.n_F - max_followers
 
-    return Population_state(
-        n_L=state.n_L,
-        n_F=max_followers,
-        n_B=state.n_B + excess_followers,
-        n_C=state.n_C,
-    )
+    followers = []
+    for strategy in strategies:
+        if strategy.position == Position.FOLLOWER:
+            followers.append(strategy)
+
+    while excess_followers > 0:
+        excess_followers -= 1
+        follower = random.choice(followers)
+        follower.position = Position.BORDER
+        followers.remove(follower)
 
 def max_center_count(herd_size: int) -> int:
     """
@@ -194,37 +193,39 @@ def max_center_count(herd_size: int) -> int:
 
 
 def enforce_cohesive_group_constraint(
-    state: Population_state,
-) -> Population_state:
+    strategies: list[Strategy_prey],
+) -> None:
     """
     Ensures the number of center individuals is geometrically plausible.
     If too many center individuals exist, move excess to border.
     """
+    state = compress_positions_to_state(strategies)
 
     herd_size = state.n_B + state.n_C
     allowed_center = max_center_count(herd_size)
 
     if state.n_C <= allowed_center:
-        return state
+        return
 
     excess_center = state.n_C - allowed_center
 
-    return Population_state(
-        n_L=state.n_L,
-        n_F=state.n_F,
-        n_B=state.n_B + excess_center,
-        n_C=allowed_center,
-    )
+    centers = []
+    for strategy in strategies:
+        if strategy.position == Position.CENTER:
+            centers.append(strategy)
 
+    while excess_center > 0:
+        excess_center -= 1
+        center = random.choice(centers)
+        center.position = Position.BORDER
+        centers.remove(center)
 
 def enforce_geometric_constraints(
-    state: Population_state,
+    strategies: list[Strategy_prey],
     r_F_L: int = 8,
-) -> Population_state:
-    state = enforce_mobile_group_constraint(state, r_F_L=r_F_L)
-    state = enforce_cohesive_group_constraint(state)
-    state.validation()
-    return state
+) -> None:
+    enforce_mobile_group_constraint(strategies, r_F_L=r_F_L)
+    enforce_cohesive_group_constraint(strategies)
 
 def random_relocation(
     state: Population_state,

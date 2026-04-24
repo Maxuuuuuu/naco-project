@@ -12,13 +12,13 @@ class PositionHistory:
     C_count: int = 0
 
     def add(self, pos: Position):
-        if pos is "F":
+        if pos == Position.FOLLOWER:
             self.F_count += 1
-        elif pos is "B":
+        elif pos == Position.BORDER:
             self.B_count += 1
-        elif pos is "L":
+        elif pos == Position.LEADER:
             self.L_count += 1
-        elif pos is "C":
+        elif pos == Position.CENTER:
             self.C_count += 1
         else:
             raise ValueError("Invalid position")
