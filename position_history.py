@@ -1,10 +1,7 @@
-from dataclasses import dataclass
-
-from prototype_dev import Position
-
-
 # Store position counts.
-@dataclass
+from position import Position
+
+
 class PositionHistory:
     F_count: int = 0
     B_count: int = 0

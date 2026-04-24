@@ -7,15 +7,9 @@ from dataclasses import dataclass
 from enum import Enum
 import math
 
+from position import Position
 from position_history import PositionHistory
 
-
-# Define the possible positions for the agent
-class Position(str, Enum):
-    LEADER = "L"
-    FOLLOWER = "F"
-    BORDER = "B"
-    CENTER = "C"
 
 @dataclass
 class Strategy_prey:
