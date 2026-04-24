@@ -38,7 +38,7 @@ def generate_for_position(pos: Position) -> Strategy_prey:
 
     return strat
 
-def create_generation(generation: list[tuple[Strategy_prey, float]], mu: float = 0.1, k: int = 5):
+def create_generation(generation: list[tuple[Strategy_prey, float]], mu: float = 0.1, k: int = 5, sigma: float = 0.1) -> list[Strategy_prey]:
     new_generation: list[Strategy_prey] = []
 
     n = len(generation)
@@ -52,7 +52,7 @@ def create_generation(generation: list[tuple[Strategy_prey, float]], mu: float =
             if parent1 != parent2:
                 break
 
-        child1, child2 = combine_genes(parent1, parent2, mu)
+        child1, child2 = combine_genes(parent1, parent2, mu, sigma)
         new_generation.append(child1)
         new_generation.append(child2)
 
@@ -69,7 +69,7 @@ def select_parent(generation: list[tuple[Strategy_prey, float]], k: int) -> Stra
 
     return max(candidates, key=lambda x: x[1])[0]
 
-def combine_genes(parent1: Strategy_prey, parent2: Strategy_prey, mu: float) -> tuple[Strategy_prey, Strategy_prey]:
+def combine_genes(parent1: Strategy_prey, parent2: Strategy_prey, mu: float, sigma: float) -> tuple[Strategy_prey, Strategy_prey]:
     split: int = random.choice([1,2])
 
     child1: Strategy_prey
@@ -103,4 +103,31 @@ def combine_genes(parent1: Strategy_prey, parent2: Strategy_prey, mu: float) -> 
             position=parent1.position  # reassigned later
         )
 
-    return child1, child2
+    return mutate(child1, mu, sigma), mutate(child2, mu, sigma)
+
+def mutate(strategy: Strategy_prey, mu: float, sigma: float) -> Strategy_prey:
+    p1 = random.random()
+    if p1 < mu:
+        strategy.p_F_given_L = strategy.p_L_given_F + random.gauss(0, sigma)
+        if strategy.p_F_given_L < 0:
+            strategy.p_F_given_L = 0
+        elif strategy.p_F_given_L > 1:
+            strategy.p_F_given_L = 1
+
+    p2 = random.random()
+    if p2 < mu:
+        strategy.p_L_given_F = strategy.p_L_given_F + random.gauss(0, sigma)
+        if strategy.p_L_given_F < 0:
+            strategy.p_L_given_F = 0
+        elif strategy.p_L_given_F > 1:
+            strategy.p_L_given_F = 1
+
+    p3 = random.random()
+    if p3 < mu:
+        strategy.p_L_given_B = strategy.p_L_given_B + random.gauss(0, sigma)
+        if strategy.p_L_given_B < 0:
+            strategy.p_L_given_B = 0
+        elif strategy.p_L_given_B > 1:
+            strategy.p_L_given_B = 1
+
+    return strategy

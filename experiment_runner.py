@@ -1,6 +1,6 @@
 import csv
 
-from genetic_algorithm import generate_prey
+from genetic_algorithm import generate_prey, create_generation
 from prototype_dev import Strategy_prey, Env, Population_state, evaluate_strategy
 
 def generate_fixed_environments(step: float = 0.1):
@@ -21,12 +21,16 @@ def main():
     generations = 200
     initial_state = Population_state(10, 30, 40, 20)
 
-    step = 0.1 #0.1, 0.05, 0.25, 0.01, 0.0025
+    step = 0.25 #0.1, 0.05, 0.25, 0.01, 0.0025
     out_file = "results_step_0_1.csv"
 
     rows = []
-    for idx, env in enumerate(generate_fixed_environments(step=step), start=1):
+    steps = generate_fixed_environments(step=step)
+    print(f"Compute {steps} environments")
 
+    for idx, env in enumerate(steps, start=1):
+        print(f"Running environment: {idx}")
+        print(env)
         strategies = generate_prey(initial_state)
         for gen in range(generations):
             frequencies, fitness = evaluate_strategy(
@@ -52,6 +56,8 @@ def main():
                 "f_C": frequencies["C"],
                 #"avg_fitness": sum(fitness) / len(fitness),
             })
+
+            strategies = create_generation(fitness)
 
         # print(
         #     f"[{idx}] X=({env.X_L:.2f}, {env.X_F:.2f}, {env.X_B:.2f}, {env.X_C:.2f}) "
