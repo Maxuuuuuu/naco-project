@@ -4,28 +4,59 @@
 # Imports 
 import random
 from dataclasses import dataclass
-from enum import Enum
 import math
 
-# Define the possible positions for the agent
-class Position(str, Enum):
-    LEADER = "L"
-    FOLLOWER = "F"
-    BORDER = "B"
-    CENTER = "C"
+from position import Position
+from position_history import PositionHistory
 
 
 @dataclass
 class Strategy_prey:
     p_F_given_L: float
     p_L_given_F: float
-    p_L_given_B: float 
+    p_L_given_B: float
+
+    position: Position
+
+    history: PositionHistory = PositionHistory()
 
     def validation(self) -> None:
         values = [self.p_F_given_L, self.p_L_given_F, self.p_L_given_B]
         for value in values:
             if not (0.0 <= value <= 1.0):
                 raise ValueError("All probabilities must be between 0 and 1.")
+
+    def update_position(self) -> None:
+        self.validation()
+
+        r = random.random()
+
+        if self.position == Position.LEADER:
+            if r < self.p_F_given_L:
+                self.position = Position.FOLLOWER
+            else:
+                self.position =  Position.LEADER
+            return
+
+        elif self.position == Position.FOLLOWER:
+            if r < self.p_L_given_F:
+                self.position =  Position.LEADER
+            else:
+                self.position =  Position.FOLLOWER
+            return
+
+        elif self.position == Position.BORDER:
+            if r < self.p_L_given_B:
+                self.position =  Position.LEADER
+            else:
+                self.position =  Position.BORDER
+            return
+
+        elif self.position == Position.CENTER:
+            self.position =  Position.CENTER
+            return
+
+        raise ValueError(f"Unknown position: {self.position}")
             
 
 @dataclass
@@ -73,100 +104,73 @@ class Population_state:
         return self.n_L + self.n_F + self.n_B + self.n_C
     def vector(self) -> list[int]:
         return [self.n_L, self.n_F, self.n_B, self.n_C]
-    
-def update_one_position(position: Position, strategy: Strategy_prey) -> Position:
-    strategy.validation()
 
-    r = random.random()
-
-    if position == Position.LEADER:
-        if r < strategy.p_F_given_L:
-            return Position.FOLLOWER
-        return Position.LEADER
-
-    if position == Position.FOLLOWER:
-        if r < strategy.p_L_given_F:
-            return Position.LEADER
-        return Position.FOLLOWER
-
-    if position == Position.BORDER:
-        if r < strategy.p_L_given_B:
-            return Position.LEADER
-        return Position.BORDER
-
-    if position == Position.CENTER:
-        return Position.CENTER
-
-    raise ValueError(f"Unknown position: {position}")
-
-def expand_state_to_positions(state: Population_state) -> list[Position]:
-    state.validation()
-
-    return (
-        [Position.LEADER] * state.n_L
-        + [Position.FOLLOWER] * state.n_F
-        + [Position.BORDER] * state.n_B
-        + [Position.CENTER] * state.n_C
-    )
+# def expand_state_to_positions(state: Population_state) -> list[Position]:
+#     state.validation()
+#
+#     return (
+#         [Position.LEADER] * state.n_L
+#         + [Position.FOLLOWER] * state.n_F
+#         + [Position.BORDER] * state.n_B
+#         + [Position.CENTER] * state.n_C
+#     )
 
 
-def compress_positions_to_state(positions: list[Position]) -> Population_state:
+def compress_positions_to_state(strategies: list[Strategy_prey]) -> Population_state:
     return Population_state(
-        n_L=positions.count(Position.LEADER),
-        n_F=positions.count(Position.FOLLOWER),
-        n_B=positions.count(Position.BORDER),
-        n_C=positions.count(Position.CENTER),
+        n_L=sum(s.position == Position.LEADER for s in strategies),
+        n_F=sum(s.position == Position.FOLLOWER for s in strategies),
+        n_B=sum(s.position == Position.BORDER for s in strategies),
+        n_C=sum(s.position == Position.CENTER for s in strategies),
     )
 
 
 def update_population_once(
-    state: Population_state,
-    strategy: Strategy_prey,
+    strategies: list[Strategy_prey],
     r_F_L: int = 8,
 ) -> Population_state:
-    positions = expand_state_to_positions(state)
 
-    updated_positions = [
-        update_one_position(position, strategy)
-        for position in positions
-    ]
+    for prey in strategies:
+        prey.history.add(prey.position)
+        prey.update_position()
 
-    new_state = compress_positions_to_state(updated_positions)
-    new_state = enforce_geometric_constraints(new_state, r_F_L=r_F_L)
-    new_state.validation()
+    enforce_geometric_constraints(strategies, r_F_L=r_F_L)
 
-    return new_state
+    return compress_positions_to_state(strategies)
 
 def enforce_mobile_group_constraint(
-    state: Population_state,
+    strategies: list[Strategy_prey],
     r_F_L: int = 8,
-) -> Population_state:
+) -> None:
     """
     Ensures followers do not exceed the allowed follower/leader ratio.
     If there are too many followers, excess followers are moved to border.
     """
+    state = compress_positions_to_state(strategies)
 
     if state.n_L == 0:
-        return Population_state(
-            n_L=0,
-            n_F=0,
-            n_B=state.n_B + state.n_F,
-            n_C=state.n_C,
-        )
+        for prey in strategies:
+            if prey.position == Position.FOLLOWER:
+                prey.position = Position.BORDER
+        return
 
     max_followers = r_F_L * state.n_L
 
     if state.n_F <= max_followers:
-        return state
+        return
 
     excess_followers = state.n_F - max_followers
 
-    return Population_state(
-        n_L=state.n_L,
-        n_F=max_followers,
-        n_B=state.n_B + excess_followers,
-        n_C=state.n_C,
-    )
+    followers = []
+    for strategy in strategies:
+        if strategy.position == Position.FOLLOWER:
+            followers.append(strategy)
+
+    while excess_followers > 0:
+        excess_followers -= 1
+        follower = random.choice(followers)
+        follower.position = Position.BORDER
+        followers.remove(follower)
 
 def max_center_count(herd_size: int) -> int:
     """
@@ -183,40 +187,42 @@ def max_center_count(herd_size: int) -> int:
 
 
 def enforce_cohesive_group_constraint(
-    state: Population_state,
-) -> Population_state:
+    strategies: list[Strategy_prey],
+) -> None:
     """
     Ensures the number of center individuals is geometrically plausible.
     If too many center individuals exist, move excess to border.
     """
+    state = compress_positions_to_state(strategies)
 
     herd_size = state.n_B + state.n_C
     allowed_center = max_center_count(herd_size)
 
     if state.n_C <= allowed_center:
-        return state
+        return
 
     excess_center = state.n_C - allowed_center
 
-    return Population_state(
-        n_L=state.n_L,
-        n_F=state.n_F,
-        n_B=state.n_B + excess_center,
-        n_C=allowed_center,
-    )
+    centers = []
+    for strategy in strategies:
+        if strategy.position == Position.CENTER:
+            centers.append(strategy)
 
+    while excess_center > 0:
+        excess_center -= 1
+        center = random.choice(centers)
+        center.position = Position.BORDER
+        centers.remove(center)
 
 def enforce_geometric_constraints(
-    state: Population_state,
+    strategies: list[Strategy_prey],
     r_F_L: int = 8,
-) -> Population_state:
-    state = enforce_mobile_group_constraint(state, r_F_L=r_F_L)
-    state = enforce_cohesive_group_constraint(state)
-    state.validation()
-    return state
+) -> None:
+    enforce_mobile_group_constraint(strategies, r_F_L=r_F_L)
+    enforce_cohesive_group_constraint(strategies)
 
 def random_relocation(
-    state: Population_state,
+    strategies: list[Strategy_prey],
     r_F_L: int = 8,
 ) -> Population_state:
     positions = [
@@ -226,18 +232,18 @@ def random_relocation(
         Position.CENTER,
     ]
 
-    all_positions = random.choices(positions, k=state.total)
+    all_positions = random.choices(positions, k=len(strategies))
 
-    new_state = compress_positions_to_state(all_positions)
-    new_state = enforce_geometric_constraints(new_state, r_F_L=r_F_L)
-    new_state.validation()
-    return new_state
+    for pos, strategy in zip(all_positions, strategies):
+        strategy.position = pos
+
+    enforce_geometric_constraints(strategies, r_F_L=r_F_L)
+    return compress_positions_to_state(strategies)
 
 def run_simulation(
     initial_state: Population_state,
-    strategy: Strategy_prey,
+    strategies: list[Strategy_prey],
     steps: int = 40000, #initial 500
-    burn_in: int = 1000, #initial 100
     r_F_L: int = 8,
     relocation_interval: int = 200,
 ) -> dict[str, float]:
@@ -249,12 +255,10 @@ def run_simulation(
     if steps <= 0:
         raise ValueError("steps must be positive.")
 
-    if burn_in < 0 or burn_in >= steps:
-        raise ValueError("burn_in must be >= 0 and smaller than steps.")
-
     state = initial_state
     state.validation()
-    strategy.validation()
+    for strategy in strategies:
+        strategy.validation()
 
     counts = {
         "L": 0,
@@ -266,23 +270,21 @@ def run_simulation(
     measured_steps = 0
 
     for t in range(steps):
-        state = update_population_once(
-            state=state,
-            strategy=strategy,
+        update_population_once(
+            strategies=strategies,
             r_F_L=r_F_L,
         )
 
-        state = random_relocation(state, r_F_L=r_F_L)
+        #state = random_relocation(strategies, r_F_L=r_F_L)
 
         if (t + 1) % relocation_interval == 0:
-            state = random_relocation(state)
+            state = random_relocation(strategies, r_F_L=r_F_L)
 
-        if t >= burn_in:
-            counts["L"] += state.n_L
-            counts["F"] += state.n_F
-            counts["B"] += state.n_B
-            counts["C"] += state.n_C
-            measured_steps += 1
+        counts["L"] += state.n_L
+        counts["F"] += state.n_F
+        counts["B"] += state.n_B
+        counts["C"] += state.n_C
+        measured_steps += 1
 
     total_observations = initial_state.total * measured_steps
 
@@ -294,7 +296,7 @@ def run_simulation(
     }
 
 def compute_risk(
-    frequencies: dict[str, float],
+    strategy: Strategy_prey,
     environment: Env,
 ) -> float:
     """
@@ -304,35 +306,43 @@ def compute_risk(
 
     env = environment.normalize()
 
+    # Total positions had.
+    total: int = strategy.history.total()
+
     return (
-        env.X_L * frequencies["L"]
-        + env.X_F * frequencies["F"]
-        + env.X_B * frequencies["B"]
-        + env.X_C * frequencies["C"]
+        env.X_L * strategy.history.L_count / total
+        + env.X_F * strategy.history.F_count / total
+        + env.X_B * strategy.history.B_count / total
+        + env.X_C * strategy.history.C_count / total
     )
 
 
 def compute_prey_fitness(
-    frequencies: dict[str, float],
+    strategies: list[Strategy_prey],
     environment: Env,
-) -> float:
+) -> list[tuple[Strategy_prey, float]]:
     """
     Converts risk into fitness.
     Higher fitness is better.
     """
 
-    risk = compute_risk(frequencies, environment)
-    return 1.0 - risk
+    fitness: list[tuple[Strategy_prey, float]] = []
+
+    for strategy in strategies:
+        risk = compute_risk(strategy, environment)
+        fitness.append((strategy, 1 - risk))
+
+    return fitness
 
 def evaluate_strategy(
-    strategy: Strategy_prey,
+    strategies: list[Strategy_prey],
     initial_state: Population_state,
     environment: Env,
     steps: int = 40000, #initial 500
     burn_in: int = 1000, #initial 100
     r_F_L: int = 8,
     relocation_interval: int = 200,
-) -> tuple[dict[str, float], float]:
+) -> tuple[dict[str, float], list[tuple[Strategy_prey, float]]]:
     """
     Runs simulation and returns:
     1. positional frequencies f
@@ -341,15 +351,14 @@ def evaluate_strategy(
 
     frequencies = run_simulation(
         initial_state=initial_state,
-        strategy=strategy,
+        strategies=strategies,
         steps=steps,
-        burn_in=burn_in,
         r_F_L=r_F_L,
         relocation_interval=relocation_interval,
     )
 
     fitness = compute_prey_fitness(
-        frequencies=frequencies,
+        strategies=strategies,
         environment=environment,
     )
 
