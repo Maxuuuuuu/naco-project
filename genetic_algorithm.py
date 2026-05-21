@@ -4,25 +4,19 @@ from prototype_dev import Strategy_prey, Population_state, Position
 
 
 # Generate n random prey.
-def generate_prey(state: Population_state) -> list[Strategy_prey]:
+def generate_prey(generations: int) -> list[Strategy_prey]:
     # Create list to store prey.
     prey: list[Strategy_prey] = []
 
     # Create n prey.
-    for i in range(state.n_L):
-        strat: Strategy_prey = generate_for_position(Position.LEADER)
-        prey.append(strat)
-
-    for i in range(state.n_F):
-        strat: Strategy_prey = generate_for_position(Position.FOLLOWER)
-        prey.append(strat)
-
-    for i in range(state.n_B):
-        strat: Strategy_prey = generate_for_position(Position.BORDER)
-        prey.append(strat)
-
-    for i in range(state.n_C):
-        strat: Strategy_prey = generate_for_position(Position.CENTER)
+    for _ in range(generations):
+        pos = random.choice([
+            Position.LEADER,
+            Position.FOLLOWER,
+            Position.BORDER,
+            Position.CENTER
+        ])
+        strat: Strategy_prey = generate_for_position(pos)
         prey.append(strat)
 
     # Return generated prey.
@@ -38,7 +32,7 @@ def generate_for_position(pos: Position) -> Strategy_prey:
 
     return strat
 
-def create_generation(generation: list[tuple[Strategy_prey, float]], mu: float = 0.1, k: int = 5, sigma: float = 0.1) -> list[Strategy_prey]:
+def create_generation(generation: list[tuple[Strategy_prey, float]], mu: float = 0.1, k: int = 4, sigma: float = 0.02) -> list[Strategy_prey]:
     new_generation: list[Strategy_prey] = []
 
     n = len(generation)

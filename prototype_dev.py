@@ -240,6 +240,23 @@ def random_relocation(
     enforce_geometric_constraints(strategies, r_F_L=r_F_L)
     return compress_positions_to_state(strategies)
 
+def get_state_counts(strats: list[Strategy_prey]):
+    lc = fc = bc = cc = 0
+
+    for strat in strats:
+        if strat.position == "L":
+            lc += 1
+        elif strat.position == "F":
+            fc += 1
+        elif strat.position == "B":
+            bc += 1
+        elif strat.position == "C":
+            cc += 1
+
+    state: Population_state = Population_state(lc, fc, bc, cc)
+
+    return state
+
 def run_simulation(
     initial_state: Population_state,
     strategies: list[Strategy_prey],
@@ -276,6 +293,8 @@ def run_simulation(
         )
 
         #state = random_relocation(strategies, r_F_L=r_F_L)
+
+        state = get_state_counts(strategies)
 
         if (t + 1) % relocation_interval == 0:
             state = random_relocation(strategies, r_F_L=r_F_L)
