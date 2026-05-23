@@ -29,13 +29,13 @@ experiments: list[Experiment] = [
 
 
 def main():
-    generations = 500
+    generations = 2000
     #
     # step = 0.25 #0.1, 0.05, 0.25, 0.01, 0.0025
     # For stochasticity.
     runs_per_env = 3
     for exp in experiments:
-        out_file = f"results/test/{exp.name}.csv"
+        out_file = f"results/g2000/{exp.name}.csv"
         rows = []
 
         for run in range(runs_per_env):
