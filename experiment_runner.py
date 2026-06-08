@@ -35,7 +35,7 @@ def main():
     # For stochasticity.
     runs_per_env = 3
     for exp in experiments:
-        out_file = f"results/g2000/{exp.name}.csv"
+        out_file = f"results/g2000tr3v2/{exp.name}.csv"
         rows = []
 
         for run in range(runs_per_env):

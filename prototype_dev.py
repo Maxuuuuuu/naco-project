@@ -134,9 +134,28 @@ def update_population_once(
         prey.history.add(prey.position)
         prey.update_position()
 
+    #a = count_positions(strategies)
     enforce_geometric_constraints(strategies, r_F_L=r_F_L)
+    #b = count_positions(strategies)
 
     return compress_positions_to_state(strategies)
+
+def count_positions(population: list[Strategy_prey]) -> dict[Position, int]:
+    """
+    Counts how many prey are currently in each position.
+    """
+
+    counts = {
+        Position.LEADER: 0,
+        Position.FOLLOWER: 0,
+        Position.BORDER: 0,
+        Position.CENTER: 0,
+    }
+
+    for prey in population:
+        counts[prey.position] += 1
+
+    return counts
 
 def enforce_mobile_group_constraint(
     strategies: list[Strategy_prey],
@@ -146,31 +165,27 @@ def enforce_mobile_group_constraint(
     Ensures followers do not exceed the allowed follower/leader ratio.
     If there are too many followers, excess followers are moved to border.
     """
-    state = compress_positions_to_state(strategies)
+    counts = count_positions(strategies)
 
-    if state.n_L == 0:
-        for prey in strategies:
-            if prey.position == Position.FOLLOWER:
-                prey.position = Position.BORDER
+    n_leaders = counts[Position.LEADER]
+    n_followers = counts[Position.FOLLOWER]
+
+    max_followers = r_F_L * n_leaders
+
+    if n_followers <= max_followers:
         return
 
-    max_followers = r_F_L * state.n_L
+    excess_followers = n_followers - max_followers
 
-    if state.n_F <= max_followers:
-        return
+    follower_agents = [
+        prey for prey in strategies
+        if prey.position == Position.FOLLOWER
+    ]
 
-    excess_followers = state.n_F - max_followers
+    random.shuffle(follower_agents)
 
-    followers = []
-    for strategy in strategies:
-        if strategy.position == Position.FOLLOWER:
-            followers.append(strategy)
-
-    while excess_followers > 0:
-        excess_followers -= 1
-        follower = random.choice(followers)
-        follower.position = Position.BORDER
-        followers.remove(follower)
+    for prey in follower_agents[:excess_followers]:
+        prey.position = Position.BORDER
 
 def max_center_count(herd_size: int) -> int:
     """
@@ -185,6 +200,13 @@ def max_center_count(herd_size: int) -> int:
 
     return max(0, math.floor(value))
 
+def calculate_target_centres(herd_size: int) -> int:
+    if herd_size < 8:
+        return 0
+
+    target_centres = int((herd_size ** (1 / 3) - 2) ** 3)
+
+    return max(0, min(target_centres, herd_size))
 
 def enforce_cohesive_group_constraint(
     strategies: list[Strategy_prey],
@@ -193,26 +215,22 @@ def enforce_cohesive_group_constraint(
     Ensures the number of center individuals is geometrically plausible.
     If too many center individuals exist, move excess to border.
     """
-    state = compress_positions_to_state(strategies)
+    herd_agents = [
+        prey for prey in strategies
+        if prey.position in {Position.BORDER, Position.CENTER}
+    ]
 
-    herd_size = state.n_B + state.n_C
-    allowed_center = max_center_count(herd_size)
+    herd_size = len(herd_agents)
+    target_centres = calculate_target_centres(herd_size)
 
-    if state.n_C <= allowed_center:
-        return
+    random.shuffle(herd_agents)
 
-    excess_center = state.n_C - allowed_center
+    for i, prey in enumerate(herd_agents):
+        if i < target_centres:
+            prey.position = Position.CENTER
+        else:
+            prey.position = Position.BORDER
 
-    centers = []
-    for strategy in strategies:
-        if strategy.position == Position.CENTER:
-            centers.append(strategy)
-
-    while excess_center > 0:
-        excess_center -= 1
-        center = random.choice(centers)
-        center.position = Position.BORDER
-        centers.remove(center)
 
 def enforce_geometric_constraints(
     strategies: list[Strategy_prey],
@@ -329,11 +347,11 @@ def compute_risk(
     total: int = strategy.history.total()
 
     return (
-        env.X_L * strategy.history.L_count / total
-        + env.X_F * strategy.history.F_count / total
-        + env.X_B * strategy.history.B_count / total
-        + env.X_C * strategy.history.C_count / total
-    )
+        env.X_L * strategy.history.L_count
+        + env.X_F * strategy.history.F_count
+        + env.X_B * strategy.history.B_count
+        + env.X_C * strategy.history.C_count
+    ) / total
 
 
 def compute_prey_fitness(

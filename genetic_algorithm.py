@@ -102,7 +102,7 @@ def combine_genes(parent1: Strategy_prey, parent2: Strategy_prey, mu: float, sig
 def mutate(strategy: Strategy_prey, mu: float, sigma: float) -> Strategy_prey:
     p1 = random.random()
     if p1 < mu:
-        strategy.p_F_given_L = strategy.p_L_given_F + random.gauss(0, sigma)
+        strategy.p_F_given_L = strategy.p_F_given_L + random.gauss(0, sigma)
         if strategy.p_F_given_L < 0:
             strategy.p_F_given_L = 0
         elif strategy.p_F_given_L > 1:
