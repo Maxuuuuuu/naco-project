@@ -1939,6 +1939,7 @@ def save_to_csv(
 def save_summary_to_csv(
     results: list[FigureReproductionResult],
     csv_path: str,
+    run: int
 ) -> None:
     """
     Saves one final summary row per figure target.
@@ -2065,7 +2066,7 @@ if __name__ == "__main__":
 
             safe_target_name = target.name.lower().replace(" ", "_")
 
-            records_csv_path = output_dir / f"{safe_target_name}_generation_records.csv"
+            records_csv_path = output_dir / f"{safe_target_name}_{run}_generation_records.csv"
 
             save_to_csv(
                 result=result,
