@@ -20,5 +20,11 @@ class PositionHistory:
         else:
             raise ValueError("Invalid position")
 
+    def reset(self):
+        self.L_count = 0
+        self.F_count = 0
+        self.B_count = 0
+        self.C_count = 0
+
     def total(self):
         return self.F_count + self.B_count + self.L_count + self.C_count

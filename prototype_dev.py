@@ -8,17 +8,24 @@ import math
 
 from position import Position
 from position_history import PositionHistory
+from predator import Predator
 
-
-@dataclass
 class Strategy_prey:
-    p_F_given_L: float
-    p_L_given_F: float
-    p_L_given_B: float
+    def __init__(self,  p_F_given_L: float, p_L_given_F: float, p_L_given_B: float, position: Position):
+        self.p_F_given_L: float = p_F_given_L
+        self.p_L_given_F: float = p_L_given_F
+        self.p_L_given_B: float = p_L_given_B
+        self.position: Position = position
+        self.history: PositionHistory = PositionHistory()
 
-    position: Position
-
-    history: PositionHistory = PositionHistory()
+    def copy(self):
+        c = Strategy_prey(
+            p_F_given_L=self.p_F_given_L,
+            p_L_given_F=self.p_L_given_F,
+            p_L_given_B=self.p_L_given_B,
+            position=self.position,
+        )
+        return c
 
     def validation(self) -> None:
         values = [self.p_F_given_L, self.p_L_given_F, self.p_L_given_B]
@@ -278,9 +285,10 @@ def get_state_counts(strats: list[Strategy_prey]):
 def run_simulation(
     initial_state: Population_state,
     strategies: list[Strategy_prey],
-    steps: int = 40000, #initial 500
+    steps: int = 500, #initial 500
     r_F_L: int = 8,
     relocation_interval: int = 200,
+    use_coevolution: bool = False,
 ) -> dict[str, float]:
     """
     Runs the behavioural simulation and returns long-run positional frequencies.
@@ -346,12 +354,12 @@ def compute_risk(
     # Total positions had.
     total: int = strategy.history.total()
 
-    return (
+    return 1.0 / (1.0 +(
         env.X_L * strategy.history.L_count
         + env.X_F * strategy.history.F_count
         + env.X_B * strategy.history.B_count
         + env.X_C * strategy.history.C_count
-    ) / total
+    ))
 
 
 def compute_prey_fitness(
@@ -366,20 +374,69 @@ def compute_prey_fitness(
     fitness: list[tuple[Strategy_prey, float]] = []
 
     for strategy in strategies:
-        risk = compute_risk(strategy, environment)
-        fitness.append((strategy, 1 - risk))
+        fit = compute_risk(strategy, environment)
+        fitness.append((strategy, fit))
 
     return fitness
+
+def holling_type_II(spent, total):
+    h = total / 4 # Divide by possible positions.
+    return spent / (spent + h)
+
+def compute_pred_prey_fitness(
+    strategies: list[Strategy_prey],
+    predators: list[Predator],
+):
+    tL, tF, tB, tC = 0, 0, 0, 0
+
+    for prey in strategies:
+        tL += prey.history.L_count
+        tF += prey.history.F_count
+        tB += prey.history.B_count
+        tC += prey.history.C_count
+
+    total_prey_time = tL + tF + tB + tC
+
+    pred_fitness: list[tuple[Predator, float]] = []
+
+    preds = len(predators)
+    pL, pF, pB, pC = 0.0, 0.0, 0.0, 0.0
+    for predator in predators:
+        pL += predator.L_predation
+        pF += predator.F_predation
+        pB += predator.B_predation
+        pC += predator.C_predation
+
+        # Compute predation applied. No need to normalize.
+        fitness = (
+                holling_type_II(tL, total_prey_time) * predator.L_predation +
+                holling_type_II(tF, total_prey_time) * predator.F_predation +
+                holling_type_II(tB, total_prey_time) * predator.B_predation +
+                holling_type_II(tC, total_prey_time) * predator.C_predation
+        )
+        pred_fitness.append((predator, fitness))
+
+    pL /= preds
+    pF /= preds
+    pB /= preds
+    pC /= preds
+
+    avg_predation = Env(X_L=pL, X_F=pF, X_B=pB, X_C=pC)
+    prey_fitness = compute_prey_fitness(strategies=strategies, environment=avg_predation)
+    return prey_fitness, pred_fitness
 
 def evaluate_strategy(
     strategies: list[Strategy_prey],
     initial_state: Population_state,
     environment: Env,
-    steps: int = 40000, #initial 500
+    steps: int = 500, #initial 500
     burn_in: int = 1000, #initial 100
     r_F_L: int = 8,
     relocation_interval: int = 200,
-) -> tuple[dict[str, float], list[tuple[Strategy_prey, float]]]:
+    use_coevolution: bool = False,
+    predators: list[Predator] = None,
+) -> tuple[dict[str, float], list[tuple[Strategy_prey, float]], list[tuple[Predator, float]]]:
+
     """
     Runs simulation and returns:
     1. positional frequencies f
@@ -392,11 +449,22 @@ def evaluate_strategy(
         steps=steps,
         r_F_L=r_F_L,
         relocation_interval=relocation_interval,
+        use_coevolution = use_coevolution
     )
 
-    fitness = compute_prey_fitness(
-        strategies=strategies,
-        environment=environment,
-    )
+    fitness = []
+    if not use_coevolution:
+        fitness = compute_prey_fitness(
+            strategies=strategies,
+            environment=environment
+        )
 
-    return frequencies, fitness
+    pred_fitness = []
+    if use_coevolution:
+       fitness, pred_fitness = compute_pred_prey_fitness(
+           strategies=strategies,
+           predators=predators,
+       )
+
+
+    return frequencies, fitness, pred_fitness

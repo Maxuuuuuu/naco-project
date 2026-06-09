@@ -1,5 +1,6 @@
 import random
 
+from predator import Predator
 from prototype_dev import Strategy_prey, Population_state, Position
 
 
@@ -21,6 +22,25 @@ def generate_prey(generations: int) -> list[Strategy_prey]:
 
     # Return generated prey.
     return prey
+
+# Generate n random predators.
+def generate_predators(n: int) -> list[Predator]:
+    predators: list[Predator] = []
+
+    for _ in range(n):
+        strat = [random.random() for _ in range(4)]
+        total = sum(strat)
+        probs = [s / total for s in strat]
+
+        predator = Predator(
+            L_predation=probs[0],
+            F_predation=probs[1],
+            B_predation=probs[2],
+            C_predation=probs[3]
+        )
+        predators.append(predator)
+
+    return predators
 
 def generate_for_position(pos: Position) -> Strategy_prey:
     strat = Strategy_prey(
@@ -125,3 +145,124 @@ def mutate(strategy: Strategy_prey, mu: float, sigma: float) -> Strategy_prey:
             strategy.p_L_given_B = 1
 
     return strategy
+
+# -===================================-
+
+def select_predator(generation: list[tuple[Predator, float]], k: int) -> Predator:
+    candidates: list[tuple[Predator, float]] = []
+
+    n = len(generation)
+
+    for _ in range(k):
+        index = random.randint(0, n - 1)
+        candidates.append(generation[index])
+
+    return max(candidates, key=lambda x: x[1])[0]
+
+def combine_predators(parent1: Predator, parent2: Predator, mu: float, sigma: float) -> tuple[Predator, Predator]:
+    split: int = random.choice([1,3])
+
+    child1: Predator
+    child2: Predator
+
+    if split == 0:
+        child1 = Predator(
+            L_predation=parent1.L_predation,
+            F_predation=parent2.F_predation,
+            B_predation=parent2.B_predation,
+            C_predation=parent2.C_predation,
+        )
+        child2 = Predator(
+            L_predation=parent2.L_predation,
+            F_predation=parent1.F_predation,
+            B_predation=parent1.B_predation,
+            C_predation=parent1.C_predation
+        )
+
+    elif split == 1:
+        child1 = Predator(
+            L_predation=parent1.L_predation,
+            F_predation=parent1.F_predation,
+            B_predation=parent2.B_predation,
+            C_predation=parent2.C_predation,
+        )
+        child2 = Predator(
+            L_predation=parent2.L_predation,
+            F_predation=parent2.F_predation,
+            B_predation=parent1.B_predation,
+            C_predation=parent1.C_predation
+        )
+
+    else:
+        child1 = Predator(
+            L_predation=parent1.L_predation,
+            F_predation=parent1.F_predation,
+            B_predation=parent1.B_predation,
+            C_predation=parent2.C_predation,
+        )
+        child2 = Predator(
+            L_predation=parent2.L_predation,
+            F_predation=parent2.F_predation,
+            B_predation=parent2.B_predation,
+            C_predation=parent1.C_predation
+        )
+
+    child1 = mutate_predator(child1, mu, sigma).normalize()
+    child2 = mutate_predator(child2, mu, sigma).normalize()
+
+    return child1, child2
+
+def mutate_predator(predator: Predator, mu: float, sigma: float) -> Predator:
+    p1 = random.random()
+    if p1 < mu:
+        predator.L_predation = predator.L_predation + random.gauss(0, sigma)
+        if predator.L_predation < 0:
+            predator.L_predation = 0
+        elif predator.L_predation > 1:
+            predator.L_predation = 1
+
+    p2 = random.random()
+    if p2 < mu:
+        predator.F_predation = predator.F_predation + random.gauss(0, sigma)
+        if predator.F_predation < 0:
+            predator.F_predation = 0
+        elif predator.F_predation > 1:
+            predator.F_predation = 1
+
+    p3 = random.random()
+    if p3 < mu:
+        predator.B_predation = predator.B_predation + random.gauss(0, sigma)
+        if predator.B_predation < 0:
+            predator.B_predation = 0
+        elif predator.B_predation > 1:
+            predator.B_predation = 1
+
+    p4 = random.random()
+    if p4 < mu:
+        predator.C_predation = predator.C_predation + random.gauss(0, sigma)
+        if predator.C_predation < 0:
+            predator.C_predation = 0
+        elif predator.C_predation > 1:
+            predator.C_predation = 1
+
+    return predator
+
+def create_predator_generation(generation: list[tuple[Predator, float]], k: int, mu: float, sigma: float) -> list[Predator]:
+    new_generation: list[Predator] = []
+
+    n = len(generation)
+
+    for i in range(int(n / 2)):
+        parent1 = select_predator(generation, k)
+
+        parent2: Predator
+        while True:
+            parent2 = select_predator(generation, k)
+            if parent1 != parent2:
+                break
+
+        child1, child2 = combine_predators(parent1, parent2, mu, sigma)
+        new_generation.append(child1)
+        new_generation.append(child2)
+
+    return new_generation

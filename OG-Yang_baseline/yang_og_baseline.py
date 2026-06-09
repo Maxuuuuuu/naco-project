@@ -1838,6 +1838,7 @@ def print_figure_reproduction_report(
 def save_to_csv(
     result: FigureReproductionResult,
     csv_path: str,
+    run: int
 ) -> None:
     """
     Saves generation-by-generation GA records for one figure target.
@@ -1863,6 +1864,7 @@ def save_to_csv(
 
         writer.writerow([
             "target_name",
+            "run",
             "generation",
 
             "X_L",
@@ -1899,6 +1901,7 @@ def save_to_csv(
         for record in records:
             writer.writerow([
                 target.name,
+                run,
                 record.generation,
 
                 target.environment.X_L,
@@ -2030,45 +2033,49 @@ def save_summary_to_csv(
 
 if __name__ == "__main__":
     PRACTICAL_SETTINGS = {
-        "population_size": 200,
-        "generations": 500,
+        "population_size": 1000,
+        "generations": 1000,
         "episode_steps": 500,
         "replacement_rate": 0.10,
         "tournament_size": 4,
         "mutation_std": 0.02,
         "r_F_per_L": 8,
         "relocation_interval": 100,
-        "record_interval": 10,
+        "record_interval": 1,
     }
 
-    output_dir = Path("yang_reproduction_outputs")
+    output_dir = Path("yang_reproduction_outputs/final/")
     output_dir.mkdir(exist_ok=True)
 
     all_results = []
 
+    rerun_count = 3
+
     for index, target in enumerate(FIGURE_REPRODUCTION_TARGETS):
-        print(f"\nRunning {target.name}...")
+        for run in range(rerun_count):
+            print(f"\nRunning {target.name}...")
 
-        result = reproduce_figure_target(
-            target=target,
-            seed=42 + index,
-            **PRACTICAL_SETTINGS,
-        )
+            result = reproduce_figure_target(
+                target=target,
+                seed=42 + index,
+                **PRACTICAL_SETTINGS,
+            )
 
-        print_figure_reproduction_result(result)
+            print_figure_reproduction_result(result)
 
-        safe_target_name = target.name.lower().replace(" ", "_")
+            safe_target_name = target.name.lower().replace(" ", "_")
 
-        records_csv_path = output_dir / f"{safe_target_name}_generation_records.csv"
+            records_csv_path = output_dir / f"{safe_target_name}_generation_records.csv"
 
-        save_to_csv(
-            result=result,
-            csv_path=str(records_csv_path),
-        )
+            save_to_csv(
+                result=result,
+                csv_path=str(records_csv_path),
+                run=run
+            )
 
-        print(f"Saved generation records to: {records_csv_path}")
+            print(f"Saved generation records to: {records_csv_path}")
 
-        all_results.append(result)
+            all_results.append(result)
 
     summary_csv_path = output_dir / "figure_reproduction_summary.csv"
 
