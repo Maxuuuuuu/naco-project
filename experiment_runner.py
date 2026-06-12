@@ -50,7 +50,6 @@ experiments: list[Experiment] = [
 def main():
     generations = 1000
     #
-    # step = 0.25 #0.1, 0.05, 0.25, 0.01, 0.0025
     # For stochasticity.
     runs_per_env = 3
     use_coevolution = True
